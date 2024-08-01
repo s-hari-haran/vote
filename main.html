@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voting App</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        .hidden {
+            display: none;
+        }
+        #candidatesGrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        .candidate-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            background-color: #fff;
+            transition: transform 0.3s ease;
+        }
+        .candidate-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .candidate-card img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #3498db;
+            color: #fff;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        input[type="text"], input[type="password"], input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        #votingResults {
+            list-style-type: none;
+        }
+        #votingResults li {
+            background-color: #ecf0f1;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .toggle-label {
+            margin-left: 10px;
+        }
+        #loginForm {
+            margin-bottom: 20px;
+        }
+        .danger {
+            background-color: #e74c3c;
+        }
+        .danger:hover {
+            background-color: #c0392b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Voting App</h1>
+        <div class="toggle-container">
+            <button id="toggleView">Switch to Admin View</button>
+        </div>
+
+        <div id="voterView">
+            <h2>Vote for Your Candidate</h2>
+            <div id="candidatesGrid"></div>
+        </div>
+
+        <div id="adminView" class="hidden">
+            <h2>Admin Panel</h2>
+            <div id="loginForm">
+                <input type="password" id="adminPassword" placeholder="Enter admin password">
+                <button id="loginBtn">Login</button>
+            </div>
+            <div id="adminContent" class="hidden">
+                <div>
+                    <h3>Add Candidate</h3>
+                    <form id="addCandidateForm">
+                        <input type="text" id="candidateName" placeholder="Candidate Name" required>
+                        <input type="file" id="candidateImage" accept="image/*" required>
+                        <button type="submit">Add Candidate</button>
+                    </form>
+                </div>
+                <div>
+                    <h3>Voting Results</h3>
+                    <ul id="votingResults"></ul>
+                    <button id="resetVotesBtn">Reset Votes</button>
+                    <button id="resetCandidatesBtn" class="danger">Reset Candidates</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize local storage
+        if (!localStorage.getItem('candidates')) {
+            localStorage.setItem('candidates', JSON.stringify([]));
+        }
+        if (!localStorage.getItem('adminPassword')) {
+            localStorage.setItem('adminPassword', 'admin123'); // Default password
+        }
+
+        // DOM elements
+        const toggleViewBtn = document.getElementById('toggleView');
+        const voterView = document.getElementById('voterView');
+        const adminView = document.getElementById('adminView');
+        const loginForm = document.getElementById('loginForm');
+        const adminContent = document.getElementById('adminContent');
+        const adminPassword = document.getElementById('adminPassword');
+        const loginBtn = document.getElementById('loginBtn');
+        const candidatesGrid = document.getElementById('candidatesGrid');
+        const addCandidateForm = document.getElementById('addCandidateForm');
+        const votingResults = document.getElementById('votingResults');
+        const resetVotesBtn = document.getElementById('resetVotesBtn');
+        const resetCandidatesBtn = document.getElementById('resetCandidatesBtn');
+
+        // Toggle between voter and admin views
+        toggleViewBtn.addEventListener('click', () => {
+            voterView.classList.toggle('hidden');
+            adminView.classList.toggle('hidden');
+            toggleViewBtn.textContent = toggleViewBtn.textContent.includes('Admin') ? 'Switch to Voter View' : 'Switch to Admin View';
+            if (!adminView.classList.contains('hidden')) {
+                adminPassword.value = '';
+                loginForm.classList.remove('hidden');
+                adminContent.classList.add('hidden');
+            } else {
+                displayCandidates();
+            }
+        });
+
+        // Admin login
+        loginBtn.addEventListener('click', () => {
+            if (adminPassword.value === localStorage.getItem('adminPassword')) {
+                loginForm.classList.add('hidden');
+                adminContent.classList.remove('hidden');
+                displayVotingResults();
+            } else {
+                alert('Incorrect password');
+            }
+        });
+
+        // Add new candidate
+        addCandidateForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('candidateName').value;
+            const imageFile = document.getElementById('candidateImage').files[0];
+            
+            if (imageFile) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    addCandidate(name, event.target.result);
+                    addCandidateForm.reset();
+                    displayVotingResults();
+                };
+                reader.readAsDataURL(imageFile);
+            }
+        });
+
+        // Reset votes
+        resetVotesBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to reset all votes?')) {
+                const candidates = JSON.parse(localStorage.getItem('candidates'));
+                candidates.forEach(candidate => candidate.votes = 0);
+                localStorage.setItem('candidates', JSON.stringify(candidates));
+                displayVotingResults();
+            }
+        });
+
+        // Reset candidates
+        resetCandidatesBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to remove all candidates? This action cannot be undone.')) {
+                localStorage.setItem('candidates', JSON.stringify([]));
+                displayVotingResults();
+            }
+        });
+
+        // Add a new candidate
+        function addCandidate(name, imageData) {
+            const candidates = JSON.parse(localStorage.getItem('candidates'));
+            candidates.push({ name, imageData, votes: 0 });
+            localStorage.setItem('candidates', JSON.stringify(candidates));
+        }
+
+        // Display candidates for voting
+        function displayCandidates() {
+            const candidates = JSON.parse(localStorage.getItem('candidates'));
+            candidatesGrid.innerHTML = '';
+            candidates.forEach((candidate, index) => {
+                const candidateCard = document.createElement('div');
+                candidateCard.className = 'candidate-card';
+                candidateCard.innerHTML = `
+                    <img src="${candidate.imageData}" alt="${candidate.name}">
+                    <h3>${candidate.name}</h3>
+                    <button onclick="vote(${index})">Vote</button>
+                `;
+                candidatesGrid.appendChild(candidateCard);
+            });
+        }
+
+        // Vote for a candidate
+        function vote(index) {
+            const candidates = JSON.parse(localStorage.getItem('candidates'));
+            candidates[index].votes++;
+            localStorage.setItem('candidates', JSON.stringify(candidates));
+            alert('Vote submitted successfully!');
+        }
+
+        // Display voting results
+        function displayVotingResults() {
+            const candidates = JSON.parse(localStorage.getItem('candidates'));
+            votingResults.innerHTML = '';
+            candidates.forEach(candidate => {
+                const li = document.createElement('li');
+                li.textContent = `${candidate.name}: ${candidate.votes} votes`;
+                votingResults.appendChild(li);
+            });
+        }
+
+        // Initial display
+        displayCandidates();
+    </script>
+</body>
+</html>
